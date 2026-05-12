@@ -3,8 +3,8 @@
   "bots": [
     {
       "name": "principal",
-      "telegram_token": "CHANGE_ME",
-      "gemini_api_key": "",
+      "telegram_token": "8917560253:AAGUl15h9TR9xj2XQChAeMcHCa9cM-mNMwI",
+      "gemini_api_key": "AIzaSyCj7tyHlInNvLD86HEPkY_nfKUjp6CBJiQ",
       "active": true
     }
   ]
