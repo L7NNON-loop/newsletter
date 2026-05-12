@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 from core.api import AviatorAPIClient, AviatorAPIError
 from core.gemini import GeminiQuizAssistant
 from core.signals import Signal, SignalEngine
-from core.status import panel
+from core.status import panel, quiz_started, signal_detected
 from core.strategy_ai import AdaptiveStrategyAI
 from core.telegram import TelegramService
 from core.ui import generate_green_image
@@ -123,6 +123,33 @@ async def main() -> None:
         monitor_all_chats=bool(settings.get("monitor_all_chats", True)),
     )
     state = RuntimeState()
+    quiz_lock = asyncio.Lock()
+
+    async def run_quiz(manual: bool = False) -> None:
+        if quiz_lock.locked():
+            logger.info("🧠 Quiz já está ativo; solicitação ignorada")
+            return
+        async with quiz_lock:
+            previous_pause = state.quiz_paused
+            state.quiz_paused = True
+            state.last_quiz_at = asyncio.get_running_loop().time()
+            quiz_started(manual)
+            question = await gemini.engagement_question()
+            send_ok = await telegram.broadcast_quiz(int(settings["quiz_duration_seconds"]), question=question)
+            panel(
+                server_online=state.enabled,
+                total_groups_online=len(telegram.online_group_ids),
+                bot_connected=telegram.bot_connected,
+                sending_ok=send_ok,
+                last_candle=state.last_candle,
+                note="Quiz em andamento; sinais pausados temporariamente.",
+            )
+            await asyncio.sleep(int(settings["quiz_duration_seconds"]))
+            await telegram.finish_quiz()
+            state.quiz_paused = previous_pause
+
+    async def request_manual_quiz() -> None:
+        asyncio.create_task(run_quiz(manual=True))
 
     async def set_enabled(enabled: bool) -> None:
         state.enabled = enabled
@@ -136,6 +163,7 @@ async def main() -> None:
         )
 
     telegram.set_state_callback(set_enabled)
+    telegram.set_quiz_callback(request_manual_quiz)
     await telegram.start()
     online_groups = await telegram.refresh_online_groups()
     state.last_quiz_at = asyncio.get_running_loop().time()
@@ -158,13 +186,7 @@ async def main() -> None:
             now = asyncio.get_running_loop().time()
             quiz_interval = int(settings["quiz_interval_minutes"]) * 60
             if now - state.last_quiz_at >= quiz_interval:
-                state.quiz_paused = True
-                state.last_quiz_at = now
-                question = await gemini.engagement_question()
-                await telegram.broadcast_quiz(int(settings["quiz_duration_seconds"]), question=question)
-                await asyncio.sleep(int(settings["quiz_duration_seconds"]))
-                await telegram.finish_quiz()
-                state.quiz_paused = False
+                await run_quiz(manual=False)
                 continue
 
             try:
@@ -211,6 +233,7 @@ async def main() -> None:
                     state.pending_signal = signal
                     state.pending_age = 0
                     state.candles_since_signal = 0
+                    signal_detected(signal.after, signal.protection, signal.exit)
                     send_ok = await telegram.broadcast_signal(signal)
                     panel(
                         server_online=state.enabled,

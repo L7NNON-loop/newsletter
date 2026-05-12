@@ -8,6 +8,7 @@ from typing import Awaitable, Callable
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputFile, Update
 from telegram.constants import ParseMode
+from telegram.error import Conflict
 from telegram.ext import Application, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 
 from core import ui
@@ -37,11 +38,15 @@ class TelegramService:
         self.last_send_ok: bool | None = None
         self.bot_connected = False
         self._on_state_change: Callable[[bool], Awaitable[None]] | None = None
+        self._on_quiz_request: Callable[[], Awaitable[None]] | None = None
         self.application.add_handler(MessageHandler(filters.TEXT, self._handle_text))
         self.application.add_handler(CallbackQueryHandler(self._handle_callback))
 
     def set_state_callback(self, callback: Callable[[bool], Awaitable[None]]) -> None:
         self._on_state_change = callback
+
+    def set_quiz_callback(self, callback: Callable[[], Awaitable[None]]) -> None:
+        self._on_quiz_request = callback
 
     async def start(self) -> None:
         await self.application.initialize()
@@ -49,7 +54,12 @@ class TelegramService:
         self.bot_connected = True
         logger.info("🤖 Bot conectado: @%s | id=%s", bot_user.username, bot_user.id)
         await self.application.start()
-        await self.application.updater.start_polling(drop_pending_updates=True)
+        try:
+            await self.application.updater.start_polling(drop_pending_updates=True)
+        except Conflict as exc:
+            raise RuntimeError(
+                "Já existe outra instância deste bot rodando. Use `codex stop` ou `bash scripts/stop_termux.sh` antes de iniciar."
+            ) from exc
         logger.info("📡 Monitoramento de mensagens iniciado")
 
     async def stop(self) -> None:
@@ -198,6 +208,15 @@ class TelegramService:
                 )
             return
 
+        if text == "quiz":
+            if not await self._is_admin(chat_id, update.effective_user.id if update.effective_user else None):
+                await update.effective_message.reply_text("🛑 Apenas administradores podem iniciar QUIZ manual.")
+                return
+            if self._on_quiz_request:
+                await self._on_quiz_request()
+            await update.effective_message.reply_text("🧠 QUIZ manual solicitado pelo ADM.")
+            return
+
         if text in {"on", "ligar", "continuar"}:
             if self.is_running:
                 return
@@ -212,6 +231,16 @@ class TelegramService:
             if self._on_state_change:
                 await self._on_state_change(False)
             await update.effective_message.reply_text(ui.stopped_message())
+
+    async def _is_admin(self, chat_id: int, user_id: int | None) -> bool:
+        if user_id is None:
+            return False
+        try:
+            member = await self.application.bot.get_chat_member(chat_id, user_id)
+            return member.status in {"administrator", "creator"}
+        except Exception as exc:  # noqa: BLE001
+            logger.info("Não foi possível validar ADM no chat %s: %s", chat_id, exc)
+            return False
 
     async def _handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         del context

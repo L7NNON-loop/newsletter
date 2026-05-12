@@ -7,7 +7,7 @@
   "api_timeout_seconds": 10,
   "signal_cooldown_candles": 1,
   "green_check_window_candles": 6,
-  "quiz_interval_minutes": 45,
+  "quiz_interval_minutes": 20,
   "quiz_duration_seconds": 60,
   "players_min": 20,
   "players_max": 100,

@@ -52,9 +52,11 @@ aviator-bot/
 └── scripts/
     ├── configure_credentials.py
     ├── create_assets.py
+    ├── install_command.sh
     ├── install_termux.sh
     ├── set_token.py
-    └── start_termux.sh
+    ├── start_termux.sh
+    └── stop_termux.sh
 ```
 
 
@@ -77,7 +79,23 @@ bash scripts/start_termux.sh
 
 Se o GitHub pedir login porque o repositório é privado, informe seu usuário do GitHub e um Personal Access Token no lugar da senha.
 
-Depois da primeira vez, quando mudar qualquer configuração no GitHub, cole só isto no Termux:
+Depois da primeira instalação, você também ganha o comando curto:
+
+```bash
+codex start
+```
+
+Comandos disponíveis:
+
+```bash
+codex start    # inicia, faz git pull e evita conflito de getUpdates
+codex stop     # para qualquer instância anterior
+codex restart  # reinicia limpo
+codex logs     # abre logs ao vivo
+codex status   # mostra se está rodando
+```
+
+Se preferir sem comando global, use:
 
 ```bash
 cd ~/newsletter/aviator-bot && bash scripts/start_termux.sh
@@ -244,7 +262,7 @@ Edite `aviator-bot/config/settings.json`:
   "api_timeout_seconds": 10,
   "signal_cooldown_candles": 1,
   "green_check_window_candles": 6,
-  "quiz_interval_minutes": 45,
+  "quiz_interval_minutes": 20,
   "quiz_duration_seconds": 60,
   "players_min": 20,
   "players_max": 100,
@@ -261,6 +279,7 @@ Envie no grupo configurado:
 
 - `ON`, `ligar` ou `continuar` — ativa sinais e responde `🟢 SISTEMA ATIVO`. Se já estiver ativo, ignora.
 - `Pare`, `parar` ou `off` — pausa sinais e responde `🛑 PARADO`. Se já estiver parado, ignora.
+- `QUIZ` — se enviado por administrador, dispara quiz manual sem parar definitivamente o envio de sinais.
 - `/id` — mostra o ID correto do grupo/canal para preencher em `config/groups.json`.
 
 ## Como funciona
@@ -280,7 +299,9 @@ Envie no grupo configurado:
 - PNGs de `assets/` são gerados no Termux por `scripts/create_assets.py` e não são versionados, evitando erro de PR com ficheiros binários.
 - Logs ficam em `aviator-bot/logs/aviator-bot.log`.
 - Falhas de API são tratadas sem derrubar o processo.
-- O Termux mostra um painel limpo com `Servidor de sinais`, `Total de grupos online`, `BotConectado` e `Enviando mensagem`.
+- O Termux mostra um painel colorido com `Servidor de sinais`, `Total de grupos online`, `BotConectado`, `Enviando mensagem` e destaque quando detecta sinal.
+- O script de start para instâncias antigas antes de iniciar, resolvendo `Conflict: terminated by other getUpdates request`.
+- O quiz roda automaticamente a cada 20 minutos de operação e também pode ser disparado por ADM com `QUIZ`.
 
 ## Publicar no GitHub
 
