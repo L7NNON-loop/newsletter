@@ -30,7 +30,6 @@ class RuntimeState:
     candles_since_signal: int = 999
     pending_signal: Signal | None = None
     pending_age: int = 0
-    last_signal: Signal | None = None
 
 
 def load_settings() -> dict:
