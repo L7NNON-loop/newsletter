@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 from core.api import AviatorAPIClient, AviatorAPIError
 from core.gemini import GeminiQuizAssistant
 from core.signals import Signal, SignalEngine
+from core.status import panel
 from core.strategy_ai import AdaptiveStrategyAI
 from core.telegram import TelegramService
 from core.ui import generate_green_image
@@ -72,23 +73,31 @@ def load_bot_credentials() -> tuple[str, str | None]:
     return token, gemini_key
 
 
-def setup_logging(logs_dir: str, level: str) -> None:
+def setup_logging(logs_dir: str, level: str, telegram_http_logs: bool = False) -> None:
     log_dir = ROOT / logs_dir
     log_dir.mkdir(parents=True, exist_ok=True)
     logging.basicConfig(
         level=getattr(logging, level.upper(), logging.INFO),
-        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+        format="%(asctime)s | %(message)s",
         handlers=[
             logging.FileHandler(log_dir / "aviator-bot.log", encoding="utf-8"),
             logging.StreamHandler(),
         ],
     )
+    if not telegram_http_logs:
+        logging.getLogger("httpx").setLevel(logging.WARNING)
+        logging.getLogger("telegram").setLevel(logging.WARNING)
+        logging.getLogger("telegram.ext").setLevel(logging.WARNING)
 
 
 async def main() -> None:
     load_dotenv(ROOT / ".env")
     settings = load_settings()
-    setup_logging(settings.get("logs_dir", "logs"), os.getenv("LOG_LEVEL", "INFO"))
+    setup_logging(
+        settings.get("logs_dir", "logs"),
+        os.getenv("LOG_LEVEL", "INFO"),
+        bool(settings.get("telegram_http_logs", False)),
+    )
     logger = logging.getLogger("aviator-bot")
 
     token, gemini_api_key = load_bot_credentials()
@@ -111,15 +120,34 @@ async def main() -> None:
         groups_path=ROOT / "config" / "groups.json",
         links_path=ROOT / "config" / "links.json",
         bot_name=settings["bot_name"],
+        monitor_all_chats=bool(settings.get("monitor_all_chats", True)),
     )
     state = RuntimeState()
 
     async def set_enabled(enabled: bool) -> None:
         state.enabled = enabled
-        logger.info("Sistema %s via grupo", "ativado" if enabled else "pausado")
+        logger.info("%s Sistema %s via grupo", "✅" if enabled else "🛑", "ativado" if enabled else "pausado")
+        panel(
+            server_online=state.enabled,
+            total_groups_online=len(telegram.online_group_ids),
+            bot_connected=telegram.bot_connected,
+            sending_ok=telegram.last_send_ok,
+            last_candle=state.last_candle,
+        )
 
     telegram.set_state_callback(set_enabled)
     await telegram.start()
+    online_groups = await telegram.refresh_online_groups()
+    state.last_quiz_at = asyncio.get_running_loop().time()
+    if settings.get("startup_quiz_enabled", False):
+        state.last_quiz_at = 0.0
+    panel(
+        server_online=state.enabled,
+        total_groups_online=online_groups,
+        bot_connected=telegram.bot_connected,
+        sending_ok=None,
+        note="Envie /id no grupo se aparecer Chat not found.",
+    )
 
     try:
         while True:
@@ -151,7 +179,7 @@ async def main() -> None:
             previous = state.last_candle if state.last_candle is not None else latest
             state.last_candle = latest
             state.candles_since_signal += 1
-            logger.info("Nova vela detectada: %.2fx", latest)
+            logger.info("🎯 Nova vela detectada: %.2fx", latest)
 
             if state.pending_signal:
                 state.pending_age += 1
@@ -162,7 +190,14 @@ async def main() -> None:
                         settings["bot_name"],
                         ROOT / "assets" / "green_latest.png",
                     )
-                    await telegram.broadcast_green(latest, previous, state.pending_signal, image_path)
+                    send_ok = await telegram.broadcast_green(latest, previous, state.pending_signal, image_path)
+                    panel(
+                        server_online=state.enabled,
+                        total_groups_online=len(telegram.online_group_ids),
+                        bot_connected=telegram.bot_connected,
+                        sending_ok=send_ok,
+                        last_candle=latest,
+                    )
                     state.pending_signal = None
                     state.pending_age = 0
                 elif state.pending_age >= int(settings["green_check_window_candles"]):
@@ -176,7 +211,14 @@ async def main() -> None:
                     state.pending_signal = signal
                     state.pending_age = 0
                     state.candles_since_signal = 0
-                    await telegram.broadcast_signal(signal)
+                    send_ok = await telegram.broadcast_signal(signal)
+                    panel(
+                        server_online=state.enabled,
+                        total_groups_online=len(telegram.online_group_ids),
+                        bot_connected=telegram.bot_connected,
+                        sending_ok=send_ok,
+                        last_candle=latest,
+                    )
     finally:
         await api.close()
         await telegram.stop()

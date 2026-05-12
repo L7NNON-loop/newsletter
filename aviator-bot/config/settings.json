@@ -11,5 +11,8 @@
   "quiz_duration_seconds": 60,
   "players_min": 20,
   "players_max": 100,
-  "logs_dir": "logs"
+  "logs_dir": "logs",
+  "startup_quiz_enabled": false,
+  "monitor_all_chats": true,
+  "telegram_http_logs": false
 }

@@ -12,7 +12,7 @@ Se o repositório é privado e você quer editar tudo pelo GitHub, use este flux
    - `bots.json` — token do BotFather e chave Gemini opcional.
    - `groups.json` — grupos que recebem sinais.
    - `links.json` — botão/link de afiliado.
-   - `settings.json` — tempos, API, nome do bot e limites.
+   - `settings.json` — tempos, API, nome do bot, logs bonitos e monitoramento.
    - `ai_state.json` — criado automaticamente no Termux; não precisa editar no GitHub.
    - `assets/*.png` — gerados automaticamente no Termux; não ficam no PR para evitar erro de binários.
 2. No Termux, rode apenas:
@@ -82,6 +82,16 @@ Depois da primeira vez, quando mudar qualquer configuração no GitHub, cole só
 ```bash
 cd ~/newsletter/aviator-bot && bash scripts/start_termux.sh
 ```
+Se você já instalou uma versão anterior e quer limpar tudo que falhou, use:
+
+```bash
+cd ~/newsletter/aviator-bot && \
+git pull --ff-only && \
+rm -rf .venv && \
+bash scripts/install_termux.sh && \
+bash scripts/start_termux.sh
+```
+
 
 ## Instalação no Termux
 
@@ -179,6 +189,20 @@ Para trocar para outro bot, rode o mesmo comando com o novo token. O script atua
 
 ## Configurar grupos pelo GitHub
 
+Se o log mostrar `Chat not found`, o ID do grupo está errado ou o bot ainda não está realmente dentro do grupo/canal.
+
+Para descobrir o ID correto:
+
+1. Adicione o bot no grupo/canal.
+2. Coloque o bot como administrador.
+3. Envie no grupo:
+
+```text
+/id
+```
+
+O bot vai responder com o `chat_id`. Copie exatamente esse número para `aviator-bot/config/groups.json`.
+
 Edite `aviator-bot/config/groups.json`:
 
 ```json
@@ -193,7 +217,7 @@ Edite `aviator-bot/config/groups.json`:
 }
 ```
 
-Somente grupos com `active: true` recebem sinais, greens e quiz.
+Somente grupos com `active: true` recebem sinais, greens e quiz. Mensagens de grupos não permitidos são monitoradas no Termux e o bot pode responder o ID quando você enviar `/id`.
 
 ## Configurar link de afiliado pelo GitHub
 
@@ -224,7 +248,10 @@ Edite `aviator-bot/config/settings.json`:
   "quiz_duration_seconds": 60,
   "players_min": 20,
   "players_max": 100,
-  "logs_dir": "logs"
+  "logs_dir": "logs",
+  "startup_quiz_enabled": false,
+  "monitor_all_chats": true,
+  "telegram_http_logs": false
 }
 ```
 
@@ -232,8 +259,9 @@ Edite `aviator-bot/config/settings.json`:
 
 Envie no grupo configurado:
 
-- `ON` — ativa sinais e responde `🟢 SISTEMA ATIVO`.
-- `Pare` — pausa sinais e responde `🛑 PARADO`.
+- `ON`, `ligar` ou `continuar` — ativa sinais e responde `🟢 SISTEMA ATIVO`. Se já estiver ativo, ignora.
+- `Pare`, `parar` ou `off` — pausa sinais e responde `🛑 PARADO`. Se já estiver parado, ignora.
+- `/id` — mostra o ID correto do grupo/canal para preencher em `config/groups.json`.
 
 ## Como funciona
 
@@ -241,7 +269,7 @@ Envie no grupo configurado:
 - `bot.py` mantém um loop event-driven por mudança de vela, evitando spam de requests com sleep configurável.
 - `core/signals.py` analisa no mínimo 20 velas, calcula média, volatilidade e tendência curta, e gera proteção/saída respeitando `proteção < saída`.
 - `core/strategy_ai.py` registra vitórias/falhas, win rate, streaks e drawdown, salvando estado local em `config/ai_state.json`, que é criado automaticamente no Termux.
-- `core/telegram.py` envia mensagens premium, botão de afiliado, quiz e comandos ON/Pare.
+- `core/telegram.py` envia mensagens premium, botão de afiliado, quiz, comandos ON/Pare e monitora mensagens recebidas para ajudar a descobrir IDs de grupo.
 - `core/ui.py` centraliza templates visuais e gera a imagem neon de GREEN.
 
 ## Segurança e logs
@@ -252,6 +280,7 @@ Envie no grupo configurado:
 - PNGs de `assets/` são gerados no Termux por `scripts/create_assets.py` e não são versionados, evitando erro de PR com ficheiros binários.
 - Logs ficam em `aviator-bot/logs/aviator-bot.log`.
 - Falhas de API são tratadas sem derrubar o processo.
+- O Termux mostra um painel limpo com `Servidor de sinais`, `Total de grupos online`, `BotConectado` e `Enviando mensagem`.
 
 ## Publicar no GitHub
 
