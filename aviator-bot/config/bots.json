@@ -1,0 +1,11 @@
+{
+  "active_bot": "principal",
+  "bots": [
+    {
+      "name": "principal",
+      "telegram_token": "CHANGE_ME",
+      "gemini_api_key": "",
+      "active": true
+    }
+  ]
+}
