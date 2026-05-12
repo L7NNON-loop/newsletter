@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+.env.local
+logs/*.log
+assets/green_latest.png
+config/ai_state.json
+assets/*.png
+!assets/README.md

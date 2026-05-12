@@ -1,0 +1,18 @@
+{
+  "bot_name": "AVIATOR AI SYSTEM",
+  "api_url": "https://app.sscashout.online/api/velas",
+  "min_candles": 20,
+  "ai_state_path": "config/ai_state.json",
+  "poll_interval_seconds": 2.5,
+  "api_timeout_seconds": 10,
+  "signal_cooldown_candles": 1,
+  "green_check_window_candles": 6,
+  "quiz_interval_minutes": 20,
+  "quiz_duration_seconds": 60,
+  "players_min": 20,
+  "players_max": 100,
+  "logs_dir": "logs",
+  "startup_quiz_enabled": false,
+  "monitor_all_chats": true,
+  "telegram_http_logs": false
+}
