@@ -1,0 +1,3 @@
+# Opcional: melhora a imagem GREEN com texto renderizado.
+# No Termux/Python 3.13 pode exigir bibliotecas nativas, por isso não fica no requirements.txt principal.
+Pillow==10.4.0
