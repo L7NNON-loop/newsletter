@@ -1,7 +1,9 @@
-"""Integração opcional com Gemini para textos de engajamento."""
+"""Integração opcional com Gemini via REST leve, sem dependências Rust/cryptography."""
 from __future__ import annotations
 
 import logging
+
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -9,24 +11,31 @@ logger = logging.getLogger(__name__)
 class GeminiQuizAssistant:
     def __init__(self, api_key: str | None) -> None:
         self.api_key = api_key
-        self._model = None
-        if api_key:
-            try:
-                import google.generativeai as genai
-
-                genai.configure(api_key=api_key)
-                self._model = genai.GenerativeModel("gemini-1.5-flash")
-            except Exception as exc:  # noqa: BLE001 - Gemini is optional
-                logger.warning("Gemini indisponível; usando fallback local: %s", exc)
+        self.model = "gemini-1.5-flash"
 
     async def engagement_question(self) -> str:
-        if not self._model:
+        if not self.api_key:
             return "Estão gostando dos sinais? 🎯"
+
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent"
+        payload = {
+            "contents": [
+                {
+                    "parts": [
+                        {
+                            "text": "Crie uma pergunta curta em português para engajar um grupo Telegram sobre sinais Aviator."
+                        }
+                    ]
+                }
+            ]
+        }
         try:
-            response = await self._model.generate_content_async(
-                "Crie uma pergunta curta em português para engajar um grupo Telegram sobre sinais Aviator."
-            )
-            return (response.text or "Estão gostando dos sinais? 🎯").strip()
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Falha Gemini; usando pergunta padrão: %s", exc)
+            async with httpx.AsyncClient(timeout=12) as client:
+                response = await client.post(url, params={"key": self.api_key}, json=payload)
+                response.raise_for_status()
+                data = response.json()
+            text = data["candidates"][0]["content"]["parts"][0].get("text", "").strip()
+            return text or "Estão gostando dos sinais? 🎯"
+        except Exception as exc:  # noqa: BLE001 - Gemini é opcional e não pode derrubar o bot
+            logger.warning("Falha Gemini REST; usando pergunta padrão: %s", exc)
             return "Estão gostando dos sinais? 🎯"

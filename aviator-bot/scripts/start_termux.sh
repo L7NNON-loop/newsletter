@@ -15,7 +15,7 @@ fi
 
 # shellcheck disable=SC1091
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install --prefer-binary -r requirements.txt
 python scripts/create_assets.py
 
 echo "🚀 Iniciando Aviator AI System..."

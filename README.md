@@ -50,6 +50,7 @@ aviator-bot/
 │   └── README.md        # PNGs são gerados no Termux, não versionados
 ├── logs/
 └── scripts/
+    ├── configure_credentials.py
     ├── create_assets.py
     ├── install_termux.sh
     ├── set_token.py
@@ -59,18 +60,22 @@ aviator-bot/
 
 ## Instalação em um comando só para copiar e executar
 
-Troque `<URL_DO_SEU_REPOSITORIO>` pela URL do seu repositório privado no GitHub e cole tudo de uma vez no Termux:
+Use este comando completo. O erro `bash: https://github.com/...: No such file or directory` acontece quando se cola só o link do GitHub sem `git clone`.
+
+Também foi removida a dependência `google-generativeai` do install principal para evitar o erro do Termux/Python 3.13 ao compilar `cryptography` via `maturin`/Rust. O Gemini agora usa REST com `httpx`, então não precisa compilar Rust.
 
 ```bash
 pkg update -y && pkg upgrade -y && \
-pkg install -y git && \
+pkg install -y git python clang libjpeg-turbo zlib freetype && \
 cd ~ && \
 rm -rf newsletter && \
-git clone <URL_DO_SEU_REPOSITORIO> newsletter && \
+git clone https://github.com/L7NNON-loop/newsletter.git newsletter && \
 cd newsletter/aviator-bot && \
 bash scripts/install_termux.sh && \
 bash scripts/start_termux.sh
 ```
+
+Se o GitHub pedir login porque o repositório é privado, informe seu usuário do GitHub e um Personal Access Token no lugar da senha.
 
 Depois da primeira vez, quando mudar qualquer configuração no GitHub, cole só isto no Termux:
 
@@ -100,7 +105,9 @@ bash scripts/start_termux.sh
 
 ## Configurar token pelo GitHub
 
-Edite `aviator-bot/config/bots.json` no GitHub:
+O arquivo `aviator-bot/config/bots.json` é o lugar para configurar o BotFather e o Gemini pelo GitHub. Neste ambiente de teste, as credenciais fornecidas foram colocadas em `config/bots.json`; quando terminar os testes, gere novos tokens e substitua esses valores.
+
+Exemplo de formato:
 
 ```json
 {
@@ -139,6 +146,26 @@ Para usar outro bot, adicione outro item e troque `active_bot`:
 ```
 
 O bot primeiro tenta ler token do `.env`; se o `.env` estiver `CHANGE_ME`, ele usa o bot ativo em `config/bots.json`.
+
+### Configurar credenciais por comando, sem editar arquivo manualmente
+
+Para gravar credenciais somente no Termux, use:
+
+```bash
+cd ~/newsletter/aviator-bot && python scripts/configure_credentials.py --telegram-token "SEU_TOKEN_DO_BOTFATHER" --gemini-key "SUA_API_KEY_GEMINI"
+```
+
+Para gravar em `config/bots.json` e depois enviar ao GitHub privado, use:
+
+```bash
+cd ~/newsletter/aviator-bot && \
+python scripts/configure_credentials.py --github-config --telegram-token "SEU_TOKEN_DO_BOTFATHER" --gemini-key "SUA_API_KEY_GEMINI" && \
+git add config/bots.json && \
+git commit -m "Configure test bot credentials" && \
+git push
+```
+
+Depois disso, no Termux, rode `bash scripts/start_termux.sh` para puxar a configuração do GitHub e iniciar.
 
 ## Configurar token localmente, sem GitHub
 
@@ -220,6 +247,7 @@ Envie no grupo configurado:
 ## Segurança e logs
 
 - Tokens podem vir do `.env` local ou do `config/bots.json` quando você optar por configurar pelo GitHub.
+- Para evitar erro de `cryptography`/`maturin` no Termux, o `requirements.txt` principal usa apenas dependências leves; Gemini funciona via REST com `httpx`.
 - O arquivo `config/ai_state.json` é estado local de performance e fica fora do Git para não atrapalhar `git pull`.
 - PNGs de `assets/` são gerados no Termux por `scripts/create_assets.py` e não são versionados, evitando erro de PR com ficheiros binários.
 - Logs ficam em `aviator-bot/logs/aviator-bot.log`.
