@@ -87,7 +87,6 @@ class SignalEngine:
         after = candles[-1]
         protection = round(max(after + 0.02, after * 1.06), 2)
         exit_value = round(max(protection + 0.06, after * 1.22), 2)
-        protection, exit_value = self._clamp_targets(protection, exit_value)
         players = self._smart_players(volatility=volatility, trend=trend)
         return Signal(
             after=round(after, 2),
