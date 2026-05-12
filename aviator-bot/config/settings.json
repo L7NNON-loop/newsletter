@@ -7,12 +7,12 @@
   "api_timeout_seconds": 10,
   "signal_cooldown_candles": 1,
   "green_check_window_candles": 6,
-  "quiz_interval_minutes": 20,
-  "quiz_duration_seconds": 60,
   "players_min": 20,
   "players_max": 100,
   "logs_dir": "logs",
-  "startup_quiz_enabled": false,
   "monitor_all_chats": true,
-  "telegram_http_logs": false
+  "telegram_http_logs": false,
+  "always_send_signal_on_new_candle": true,
+  "startup_audio_enabled": true,
+  "startup_audio_text": "Olá caros apostadores, vocês estão aqui porque querem ganhar dinheiro, querem aprender, mais não sabem como certo? Crie a vossa conta, façam seus depósitos, e sigam as entradas confirmadas e garantidas que a nossa inteligência Artificial vai começar a dar a todos vocês."
 }
