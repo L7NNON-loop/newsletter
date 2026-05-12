@@ -14,5 +14,6 @@
   "logs_dir": "logs",
   "startup_quiz_enabled": false,
   "monitor_all_chats": true,
-  "telegram_http_logs": false
+  "telegram_http_logs": false,
+  "always_send_signal_on_new_candle": true
 }

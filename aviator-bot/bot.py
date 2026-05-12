@@ -229,6 +229,8 @@ async def main() -> None:
 
             if state.pending_signal is None and state.candles_since_signal >= int(settings["signal_cooldown_candles"]):
                 signal = engine.build_signal(snapshot.values)
+                if signal is None and bool(settings.get("always_send_signal_on_new_candle", True)):
+                    signal = engine.build_fallback_signal(snapshot.values)
                 if signal:
                     state.pending_signal = signal
                     state.pending_age = 0
