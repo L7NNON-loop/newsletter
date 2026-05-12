@@ -117,6 +117,7 @@ async def main() -> None:
         links_path=ROOT / "config" / "links.json",
         bot_name=settings["bot_name"],
         monitor_all_chats=bool(settings.get("monitor_all_chats", True)),
+        admin_user_id=int(settings.get("admin_user_id")) if settings.get("admin_user_id") else None,
     )
     state = RuntimeState()
     async def set_enabled(enabled: bool) -> None:
@@ -168,10 +169,14 @@ async def main() -> None:
             state.candles_since_signal += 1
             logger.info("🎯 Nova vela detectada: %.2fx", latest)
 
+            if state.last_signal and latest >= state.last_signal.exit:
+                await telegram.broadcast_green(latest, previous, state.last_signal, generate_green_image(latest, settings["bot_name"], ROOT / "assets" / "green_latest.png"))
+
             signal = engine.build_signal(snapshot.values)
             if signal is None:
                 signal = engine.build_fallback_signal(snapshot.values)
             if signal:
+                state.last_signal = signal
                 signal_detected(signal.after, signal.protection, signal.exit)
                 send_ok = await telegram.broadcast_signal(signal)
                 panel(

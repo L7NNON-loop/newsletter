@@ -26,11 +26,13 @@ class TelegramService:
         links_path: str | Path,
         bot_name: str,
         monitor_all_chats: bool = True,
+        admin_user_id: int | None = None,
     ) -> None:
         self.bot_name = bot_name
         self.groups_path = Path(groups_path)
         self.links_path = Path(links_path)
         self.monitor_all_chats = monitor_all_chats
+        self.admin_user_id = admin_user_id
         self.application = Application.builder().token(token).build()
         self.is_running = True
         self.online_group_ids: set[int] = set()
@@ -205,7 +207,20 @@ class TelegramService:
             )
             return
 
+        if self.admin_user_id and update.effective_user and update.effective_user.id == self.admin_user_id:
+            if text in {"/ultima", "ultima", "/ultimavela"}:
+                await update.effective_message.reply_text("Use /logs para detalhes em runtime no momento.")
+                return
+
         if not allowed:
+            if self.admin_user_id and update.effective_user and update.effective_user.id == self.admin_user_id:
+                if text in {"/logs", "logs"}:
+                    log_path = self.groups_path.parent.parent / "logs" / "aviator-bot.log"
+                    if log_path.exists():
+                        await update.effective_message.reply_text(log_path.read_text(encoding="utf-8")[-3500:])
+                    else:
+                        await update.effective_message.reply_text("Sem logs ainda.")
+                    return
             if text in {"on", "ligar", "continuar", "pare", "parar", "off"}:
                 await update.effective_message.reply_text(
                     f"⚠️ Este chat ainda não está permitido.\nID detectado: `{chat_id}`\nAdicione em config/groups.json e rode git pull/start.",

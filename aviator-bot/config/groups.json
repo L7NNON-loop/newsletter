@@ -4,6 +4,26 @@
       "name": "principal",
       "id": "-1003993625565",
       "active": true
+    },
+    {
+      "name": "grupo_2",
+      "id": "",
+      "active": false
+    },
+    {
+      "name": "grupo_3",
+      "id": "",
+      "active": false
+    },
+    {
+      "name": "grupo_4",
+      "id": "",
+      "active": false
+    },
+    {
+      "name": "grupo_5",
+      "id": "",
+      "active": false
     }
   ]
 }
