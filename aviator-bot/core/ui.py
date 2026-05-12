@@ -25,8 +25,6 @@ def signal_message(signal: Signal, bot_name: str) -> str:
         f"🛡 PROTEÇÃO: {signal.protection:.2f}x\n"
         f"🔥 SAÍDA: {signal.exit:.2f}x\n"
         f"👥 PLAYERS: {signal.players}\n\n"
-        f"🧠 AI SCORE: {signal.ai_score} ({signal.ai_percent}%)\n"
-        f"📈 VOL: {signal.volatility:.3f} | TEND: {signal.trend:.3f}\n\n"
         f"{SEPARATOR}\n"
         "⚡ STATUS: MONITORANDO\n"
         f"{SEPARATOR}"

@@ -14,9 +14,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from core.api import AviatorAPIClient, AviatorAPIError
-from core.gemini import GeminiQuizAssistant
 from core.signals import Signal, SignalEngine
-from core.status import panel, quiz_started, signal_detected
+from core.status import panel, signal_detected
 from core.strategy_ai import AdaptiveStrategyAI
 from core.telegram import TelegramService
 from core.ui import generate_green_image
@@ -27,12 +26,10 @@ ROOT = Path(__file__).resolve().parent
 @dataclass(slots=True)
 class RuntimeState:
     enabled: bool = True
-    quiz_paused: bool = False
     last_candle: float | None = None
     candles_since_signal: int = 999
     pending_signal: Signal | None = None
     pending_age: int = 0
-    last_quiz_at: float = 0.0
 
 
 def load_settings() -> dict:
@@ -100,7 +97,7 @@ async def main() -> None:
     )
     logger = logging.getLogger("aviator-bot")
 
-    token, gemini_api_key = load_bot_credentials()
+    token, _ = load_bot_credentials()
     if not token or token == "CHANGE_ME":
         raise RuntimeError(
             "Configure o token no .env ou em config/bots.json antes de iniciar o bot."
@@ -114,7 +111,6 @@ async def main() -> None:
         players_max=int(settings["players_max"]),
     )
     api = AviatorAPIClient(settings["api_url"], timeout=float(settings["api_timeout_seconds"]))
-    gemini = GeminiQuizAssistant(gemini_api_key)
     telegram = TelegramService(
         token=token,
         groups_path=ROOT / "config" / "groups.json",
@@ -123,34 +119,6 @@ async def main() -> None:
         monitor_all_chats=bool(settings.get("monitor_all_chats", True)),
     )
     state = RuntimeState()
-    quiz_lock = asyncio.Lock()
-
-    async def run_quiz(manual: bool = False) -> None:
-        if quiz_lock.locked():
-            logger.info("🧠 Quiz já está ativo; solicitação ignorada")
-            return
-        async with quiz_lock:
-            previous_pause = state.quiz_paused
-            state.quiz_paused = True
-            state.last_quiz_at = asyncio.get_running_loop().time()
-            quiz_started(manual)
-            question = await gemini.engagement_question()
-            send_ok = await telegram.broadcast_quiz(int(settings["quiz_duration_seconds"]), question=question)
-            panel(
-                server_online=state.enabled,
-                total_groups_online=len(telegram.online_group_ids),
-                bot_connected=telegram.bot_connected,
-                sending_ok=send_ok,
-                last_candle=state.last_candle,
-                note="Quiz em andamento; sinais pausados temporariamente.",
-            )
-            await asyncio.sleep(int(settings["quiz_duration_seconds"]))
-            await telegram.finish_quiz()
-            state.quiz_paused = previous_pause
-
-    async def request_manual_quiz() -> None:
-        asyncio.create_task(run_quiz(manual=True))
-
     async def set_enabled(enabled: bool) -> None:
         state.enabled = enabled
         logger.info("%s Sistema %s via grupo", "✅" if enabled else "🛑", "ativado" if enabled else "pausado")
@@ -163,12 +131,8 @@ async def main() -> None:
         )
 
     telegram.set_state_callback(set_enabled)
-    telegram.set_quiz_callback(request_manual_quiz)
     await telegram.start()
     online_groups = await telegram.refresh_online_groups()
-    state.last_quiz_at = asyncio.get_running_loop().time()
-    if settings.get("startup_quiz_enabled", False):
-        state.last_quiz_at = 0.0
     panel(
         server_online=state.enabled,
         total_groups_online=online_groups,
@@ -176,17 +140,18 @@ async def main() -> None:
         sending_ok=None,
         note="Envie /id no grupo se aparecer Chat not found.",
     )
+    if bool(settings.get("startup_audio_enabled", True)):
+        await telegram.broadcast_startup_audio(
+            settings.get(
+                "startup_audio_text",
+                "Olá caros apostadores, criem a vossa conta e sigam as entradas confirmadas.",
+            )
+        )
 
     try:
         while True:
             await asyncio.sleep(float(settings["poll_interval_seconds"]))
-            if not state.enabled or state.quiz_paused:
-                continue
-
-            now = asyncio.get_running_loop().time()
-            quiz_interval = int(settings["quiz_interval_minutes"]) * 60
-            if now - state.last_quiz_at >= quiz_interval:
-                await run_quiz(manual=False)
+            if not state.enabled:
                 continue
 
             try:
@@ -203,47 +168,19 @@ async def main() -> None:
             state.candles_since_signal += 1
             logger.info("🎯 Nova vela detectada: %.2fx", latest)
 
-            if state.pending_signal:
-                state.pending_age += 1
-                if engine.is_green(latest, state.pending_signal):
-                    ai.register_result(True)
-                    image_path = generate_green_image(
-                        latest,
-                        settings["bot_name"],
-                        ROOT / "assets" / "green_latest.png",
-                    )
-                    send_ok = await telegram.broadcast_green(latest, previous, state.pending_signal, image_path)
-                    panel(
-                        server_online=state.enabled,
-                        total_groups_online=len(telegram.online_group_ids),
-                        bot_connected=telegram.bot_connected,
-                        sending_ok=send_ok,
-                        last_candle=latest,
-                    )
-                    state.pending_signal = None
-                    state.pending_age = 0
-                elif state.pending_age >= int(settings["green_check_window_candles"]):
-                    ai.register_result(False)
-                    state.pending_signal = None
-                    state.pending_age = 0
-
-            if state.pending_signal is None and state.candles_since_signal >= int(settings["signal_cooldown_candles"]):
-                signal = engine.build_signal(snapshot.values)
-                if signal is None and bool(settings.get("always_send_signal_on_new_candle", True)):
-                    signal = engine.build_fallback_signal(snapshot.values)
-                if signal:
-                    state.pending_signal = signal
-                    state.pending_age = 0
-                    state.candles_since_signal = 0
-                    signal_detected(signal.after, signal.protection, signal.exit)
-                    send_ok = await telegram.broadcast_signal(signal)
-                    panel(
-                        server_online=state.enabled,
-                        total_groups_online=len(telegram.online_group_ids),
-                        bot_connected=telegram.bot_connected,
-                        sending_ok=send_ok,
-                        last_candle=latest,
-                    )
+            signal = engine.build_signal(snapshot.values)
+            if signal is None:
+                signal = engine.build_fallback_signal(snapshot.values)
+            if signal:
+                signal_detected(signal.after, signal.protection, signal.exit)
+                send_ok = await telegram.broadcast_signal(signal)
+                panel(
+                    server_online=state.enabled,
+                    total_groups_online=len(telegram.online_group_ids),
+                    bot_connected=telegram.bot_connected,
+                    sending_ok=send_ok,
+                    last_candle=latest,
+                )
     finally:
         await api.close()
         await telegram.stop()

@@ -60,6 +60,7 @@ class SignalEngine:
             exit_value = round(protection + 0.10, 2)
 
         players = self._smart_players(volatility=volatility, trend=trend)
+        protection, exit_value = self._clamp_targets(protection, exit_value)
         return Signal(
             after=round(after, 2),
             protection=protection,
@@ -98,6 +99,13 @@ class SignalEngine:
             ai_score=self.ai.score_label(),
             ai_percent=self.ai.score_percent(),
         )
+
+    def _clamp_targets(self, protection: float, exit_value: float) -> tuple[float, float]:
+        protection = round(min(5.0, max(2.0, protection)), 2)
+        exit_value = round(min(15.0, max(3.0, exit_value)), 2)
+        if exit_value <= protection:
+            exit_value = round(min(15.0, protection + 1.0), 2)
+        return protection, exit_value
 
     def _smart_players(self, volatility: float, trend: float) -> str:
         center = (self.players_min + self.players_max) // 2
