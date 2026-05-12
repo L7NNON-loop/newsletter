@@ -1,0 +1,16 @@
+{
+  "protection_factor": 1.08,
+  "exit_factor": 1.32,
+  "entry_sensitivity": 0.55,
+  "dynamic_volatility": 0.0,
+  "total_signals": 0,
+  "wins": 0,
+  "losses": 0,
+  "win_rate": 0.0,
+  "win_streak": 0,
+  "loss_streak": 0,
+  "max_drawdown": 0,
+  "equity": 0,
+  "peak_equity": 0,
+  "recent_results": []
+}
