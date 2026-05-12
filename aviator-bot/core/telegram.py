@@ -109,15 +109,21 @@ class TelegramService:
                 )
         return len(self.online_group_ids)
 
-    def register_keyboard(self) -> InlineKeyboardMarkup:
+    def register_keyboard(self, chat_id: int | None = None) -> InlineKeyboardMarkup:
         data = json.loads(self.links_path.read_text(encoding="utf-8"))
+        if chat_id is not None and isinstance(data.get("group_links"), list):
+            for item in data["group_links"]:
+                if str(item.get("chat_id", "")).strip() == str(chat_id):
+                    return InlineKeyboardMarkup(
+                        [[InlineKeyboardButton(item.get("button_text", "📌 REGISTRAR AGORA"), url=item.get("url", data["register_url"]))]]
+                    )
         return InlineKeyboardMarkup(
             [[InlineKeyboardButton(data["register_button_text"], url=data["register_url"])]]
         )
 
     async def broadcast_signal(self, signal: Signal) -> bool:
         text = ui.signal_message(signal, self.bot_name)
-        return await self._broadcast_text(text, reply_markup=self.register_keyboard())
+        return await self._broadcast_text(text)
 
     async def broadcast_green(self, current: float, previous: float, signal: Signal, image_path: Path) -> bool:
         caption = ui.green_message(current, previous, signal, self.bot_name)
@@ -130,7 +136,7 @@ class TelegramService:
                         chat_id=chat_id,
                         photo=InputFile(image_file, filename=image_path.name),
                         caption=caption,
-                        reply_markup=self.register_keyboard(),
+                        reply_markup=self.register_keyboard(chat_id),
                     )
                 success += 1
             except Exception as exc:  # noqa: BLE001 - broadcast must not crash loop
@@ -146,7 +152,7 @@ class TelegramService:
                 await self.application.bot.send_message(
                     chat_id=chat_id,
                     text=text,
-                    reply_markup=reply_markup,
+                    reply_markup=reply_markup or self.register_keyboard(chat_id),
                     parse_mode=ParseMode.HTML,
                 )
                 success += 1

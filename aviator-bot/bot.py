@@ -30,6 +30,7 @@ class RuntimeState:
     candles_since_signal: int = 999
     pending_signal: Signal | None = None
     pending_age: int = 0
+    last_signal: Signal | None = None
 
 
 def load_settings() -> dict:
@@ -169,14 +170,15 @@ async def main() -> None:
             state.candles_since_signal += 1
             logger.info("🎯 Nova vela detectada: %.2fx", latest)
 
-            if state.last_signal and latest >= state.last_signal.exit:
-                await telegram.broadcast_green(latest, previous, state.last_signal, generate_green_image(latest, settings["bot_name"], ROOT / "assets" / "green_latest.png"))
+            last_signal = getattr(state, "last_signal", None)
+            if last_signal and latest >= last_signal.exit:
+                await telegram.broadcast_green(latest, previous, last_signal, generate_green_image(latest, settings["bot_name"], ROOT / "assets" / "green_latest.png"))
 
             signal = engine.build_signal(snapshot.values)
             if signal is None:
                 signal = engine.build_fallback_signal(snapshot.values)
             if signal:
-                state.last_signal = signal
+                setattr(state, "last_signal", signal)
                 signal_detected(signal.after, signal.protection, signal.exit)
                 send_ok = await telegram.broadcast_signal(signal)
                 panel(
