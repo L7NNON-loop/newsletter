@@ -41,6 +41,7 @@ class TelegramService:
         self.group_signal_count: dict[int, int] = {}
         self.admin_authenticated = False
         self._admin_step: str | None = None
+        self._add_group_flow: dict | None = None
         self.online_group_ids: set[int] = set()
         self.last_send_ok: bool | None = None
         self.bot_connected = False
@@ -154,7 +155,7 @@ class TelegramService:
         if isinstance(data.get("group_links"), list):
             for item in data["group_links"]:
                 if str(item.get("chat_id", "")).strip() == str(chat_id) and item.get("url"):
-                    return str(item["url"])
+                    return str(item.get("text_url") or item["url"])
         return str(data.get("register_url", "https://example.com"))
 
     async def broadcast_signal(self, signal: Signal) -> bool:
@@ -298,6 +299,58 @@ class TelegramService:
                 else:
                     await update.effective_message.reply_text("Senha inválida.")
                 return
+            if text in {"adicionar", "/adicionar"}:
+                self._add_group_flow = {}
+                await update.effective_message.reply_text("🧩 Adicionar grupo: envie o ID do grupo:")
+                return
+            if self._add_group_flow is not None:
+                flow = self._add_group_flow
+                if "id" not in flow:
+                    flow["id"] = raw_text.strip()
+                    await update.effective_message.reply_text("✅ ID salvo. Agora envie o NOME do grupo:")
+                    return
+                if "name" not in flow:
+                    flow["name"] = raw_text.strip()
+                    await update.effective_message.reply_text("✅ Nome salvo. Agora envie o TEXTO do botão:")
+                    return
+                if "button_text" not in flow:
+                    flow["button_text"] = raw_text.strip()
+                    await update.effective_message.reply_text("✅ Texto salvo. Agora envie o LINK do botão:")
+                    return
+                if "button_url" not in flow:
+                    flow["button_url"] = raw_text.strip()
+                    await update.effective_message.reply_text("✅ Link do botão salvo. Agora envie o LINK do texto (Apostar agora):")
+                    return
+                if "text_url" not in flow:
+                    flow["text_url"] = raw_text.strip()
+                    await update.effective_message.reply_text("✅ Link do texto salvo. Agora envie a duração (ex: 30d, 1m, 59s) ou 0 para sem expiração:")
+                    return
+                if "duration" not in flow:
+                    flow["duration"] = raw_text.strip().lower()
+                    expires_at = self._parse_duration_to_expires(flow["duration"])
+                    groups = self.configured_groups()
+                    groups = [g for g in groups if str(g.get("id", "")).strip() != flow["id"]]
+                    groups.append({
+                        "name": flow["name"],
+                        "id": flow["id"],
+                        "active": True,
+                        "expires_at": expires_at,
+                    })
+                    self._save_groups(groups)
+                    links = self._load_links()
+                    links.setdefault("group_links", [])
+                    links["group_links"] = [x for x in links["group_links"] if str(x.get("chat_id", "")).strip() != flow["id"]]
+                    links["group_links"].append({
+                        "chat_id": flow["id"],
+                        "button_text": flow["button_text"],
+                        "url": flow["button_url"],
+                        "text_url": flow["text_url"],
+                    })
+                    self._save_links(links)
+                    await self.refresh_online_groups()
+                    self._add_group_flow = None
+                    await update.effective_message.reply_text(f"✅ Grupo {flow['name']} adicionado e ativado com sucesso.")
+                    return
             if self.admin_authenticated and text.startswith("/stats"):
                 lines = [f"{gid}: {cnt} sinais" for gid, cnt in sorted(self.group_signal_count.items())] or ["Sem sinais enviados ainda."]
                 await update.effective_message.reply_text("📊 Painel de grupos\n" + "\n".join(lines))
@@ -363,11 +416,6 @@ class TelegramService:
                 await update.effective_message.reply_text("Use /logs para detalhes em runtime no momento.")
                 return
 
-        if self.admin_user_id and update.effective_user and update.effective_user.id == self.admin_user_id:
-            if text in {"/ultima", "ultima", "/ultimavela"}:
-                await update.effective_message.reply_text("Use /logs para detalhes em runtime no momento.")
-                return
-
         if not allowed:
             if self.admin_user_id and update.effective_user and update.effective_user.id == self.admin_user_id:
                 if text in {"/logs", "logs"}:
@@ -398,3 +446,25 @@ class TelegramService:
             if self._on_state_change:
                 await self._on_state_change(False)
             await update.effective_message.reply_text(ui.stopped_message())
+
+    def _parse_duration_to_expires(self, value: str) -> float | None:
+        import time
+        if value in {"0", "none", "sem"}:
+            return None
+        try:
+            unit = value[-1]
+            amount = int(value[:-1])
+            seconds = amount
+            if unit == "s":
+                seconds = amount
+            elif unit == "m":
+                seconds = amount * 60
+            elif unit == "h":
+                seconds = amount * 3600
+            elif unit == "d":
+                seconds = amount * 86400
+            else:
+                return None
+            return time.time() + max(1, seconds)
+        except Exception:
+            return None
