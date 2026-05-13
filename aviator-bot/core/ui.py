@@ -16,7 +16,8 @@ SEPARATOR = "━━━━━━━━━━━━━━━━━━━━━━"
 
 
 def signal_message(signal: Signal, bot_name: str) -> str:
-    confidence = max(70, min(99, signal.ai_percent if signal.ai_percent else 90))
+    base_confidence = signal.ai_percent if signal.ai_percent else 93
+    confidence = max(90, min(95, base_confidence))
     bars = "🟩" * max(1, min(5, round(confidence / 20))) + "⬜" * (5 - max(1, min(5, round(confidence / 20))))
     return (
         "🎰 <b>NEXUS AI📢</b> 🎰\n"
