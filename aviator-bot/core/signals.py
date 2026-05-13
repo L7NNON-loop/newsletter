@@ -107,7 +107,7 @@ class SignalEngine:
 
     def _clamp_targets(self, protection: float, exit_value: float) -> tuple[float, float]:
         protection = round(min(3.0, max(1.5, protection)), 2)
-        exit_value = round(min(15.0, max(3.0, exit_value)), 2)
+        exit_value = round(min(15.0, max(2.0, exit_value)), 2)
         if exit_value <= protection:
             exit_value = round(min(15.0, protection + 1.0), 2)
         return protection, exit_value
