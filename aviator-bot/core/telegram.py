@@ -292,7 +292,7 @@ class TelegramService:
                     await update.effective_message.reply_text(
                         "✅ Acesso admin liberado.\n"
                         "Comandos:\n"
-                        "/stats\n/pausegroup <id>\n/resumegroup <id>\n/alerta <id> <msg>\n"
+                        "/status\n/stats\n/pausegroup <id>\n/resumegroup <id>\n/alerta <id> <msg>\n"
                         "/addgroup <chat_id> <nome> <active:true|false> [duracao_min]\n"
                         "/setlink <chat_id> <texto_botao> <url>"
                     )
@@ -348,9 +348,20 @@ class TelegramService:
                     })
                     self._save_links(links)
                     await self.refresh_online_groups()
+                    logger.info("✅ Grupo adicionado via painel | id=%s | nome=%s", flow["id"], flow["name"])
                     self._add_group_flow = None
                     await update.effective_message.reply_text(f"✅ Grupo {flow['name']} adicionado e ativado com sucesso.")
                     return
+            if self.admin_authenticated and text.startswith("/status"):
+                groups = self.configured_groups()
+                lines: list[str] = []
+                for g in groups:
+                    gid = str(g.get("id", ""))
+                    name = str(g.get("name", "sem_nome"))
+                    count = self.group_signal_count.get(int(gid), 0) if gid.lstrip("-").isdigit() else 0
+                    lines.append(f"{gid} [ {name} ] {{{count}}}")
+                await update.effective_message.reply_text("📡 STATUS DOS GRUPOS\n" + ("\n".join(lines) if lines else "Sem grupos configurados."))
+                return
             if self.admin_authenticated and text.startswith("/stats"):
                 lines = [f"{gid}: {cnt} sinais" for gid, cnt in sorted(self.group_signal_count.items())] or ["Sem sinais enviados ainda."]
                 await update.effective_message.reply_text("📊 Painel de grupos\n" + "\n".join(lines))
