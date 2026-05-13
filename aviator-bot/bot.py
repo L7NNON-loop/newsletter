@@ -172,7 +172,10 @@ async def main() -> None:
 
             last_signal = getattr(state, "last_signal", None)
             if last_signal and latest >= last_signal.exit:
-                await telegram.broadcast_green(latest, previous, last_signal, generate_green_image(latest, settings["bot_name"], ROOT / "assets" / "green_latest.png"))
+                green_image = ROOT / "green.png"
+                if not green_image.exists():
+                    green_image = generate_green_image(latest, settings["bot_name"], ROOT / "assets" / "green_latest.png")
+                await telegram.broadcast_green(latest, previous, last_signal, green_image)
 
             signal = engine.build_signal(snapshot.values)
             if signal is None:
