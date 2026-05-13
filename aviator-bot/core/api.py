@@ -65,4 +65,7 @@ class AviatorAPIClient:
 
         if not values:
             raise AviatorAPIError("API retornou lista de velas vazia")
+        # A API retorna o valor mais recente primeiro; normalizamos para
+        # ordem cronológica (mais antigo -> mais recente).
+        values.reverse()
         return values

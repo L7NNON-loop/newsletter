@@ -1,4 +1,4 @@
-"""Camada Telegram: grupos dinâmicos, botões, comandos ON/Pare e quiz."""
+"""Camada Telegram: grupos dinâmicos, botões e comandos ON/Pare."""
 from __future__ import annotations
 
 import json
@@ -6,10 +6,11 @@ import logging
 from pathlib import Path
 from typing import Awaitable, Callable
 
+from gtts import gTTS
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputFile, Update
 from telegram.constants import ParseMode
 from telegram.error import Conflict
-from telegram.ext import Application, CallbackQueryHandler, ContextTypes, MessageHandler, filters
+from telegram.ext import Application, ContextTypes, MessageHandler, filters
 
 from core import ui
 from core.signals import Signal
@@ -25,28 +26,23 @@ class TelegramService:
         links_path: str | Path,
         bot_name: str,
         monitor_all_chats: bool = True,
+        admin_user_id: int | None = None,
     ) -> None:
         self.bot_name = bot_name
         self.groups_path = Path(groups_path)
         self.links_path = Path(links_path)
         self.monitor_all_chats = monitor_all_chats
+        self.admin_user_id = admin_user_id
         self.application = Application.builder().token(token).build()
         self.is_running = True
-        self.quiz_active = False
-        self.quiz_votes: dict[int, str] = {}
         self.online_group_ids: set[int] = set()
         self.last_send_ok: bool | None = None
         self.bot_connected = False
         self._on_state_change: Callable[[bool], Awaitable[None]] | None = None
-        self._on_quiz_request: Callable[[], Awaitable[None]] | None = None
         self.application.add_handler(MessageHandler(filters.TEXT, self._handle_text))
-        self.application.add_handler(CallbackQueryHandler(self._handle_callback))
 
     def set_state_callback(self, callback: Callable[[bool], Awaitable[None]]) -> None:
         self._on_state_change = callback
-
-    def set_quiz_callback(self, callback: Callable[[], Awaitable[None]]) -> None:
-        self._on_quiz_request = callback
 
     async def start(self) -> None:
         await self.application.initialize()
@@ -113,15 +109,21 @@ class TelegramService:
                 )
         return len(self.online_group_ids)
 
-    def register_keyboard(self) -> InlineKeyboardMarkup:
+    def register_keyboard(self, chat_id: int | None = None) -> InlineKeyboardMarkup:
         data = json.loads(self.links_path.read_text(encoding="utf-8"))
+        if chat_id is not None and isinstance(data.get("group_links"), list):
+            for item in data["group_links"]:
+                if str(item.get("chat_id", "")).strip() == str(chat_id):
+                    return InlineKeyboardMarkup(
+                        [[InlineKeyboardButton(item.get("button_text", "📌 REGISTRAR AGORA"), url=item.get("url", data["register_url"]))]]
+                    )
         return InlineKeyboardMarkup(
             [[InlineKeyboardButton(data["register_button_text"], url=data["register_url"])]]
         )
 
     async def broadcast_signal(self, signal: Signal) -> bool:
         text = ui.signal_message(signal, self.bot_name)
-        return await self._broadcast_text(text, reply_markup=self.register_keyboard())
+        return await self._broadcast_text(text)
 
     async def broadcast_green(self, current: float, previous: float, signal: Signal, image_path: Path) -> bool:
         caption = ui.green_message(current, previous, signal, self.bot_name)
@@ -134,28 +136,13 @@ class TelegramService:
                         chat_id=chat_id,
                         photo=InputFile(image_file, filename=image_path.name),
                         caption=caption,
-                        reply_markup=self.register_keyboard(),
+                        reply_markup=self.register_keyboard(chat_id),
                     )
                 success += 1
             except Exception as exc:  # noqa: BLE001 - broadcast must not crash loop
                 logger.warning("🛑 Falha ao enviar GREEN para %s: %s", chat_id, exc)
         self.last_send_ok = bool(targets) and success == len(targets)
         return self.last_send_ok
-
-    async def broadcast_quiz(self, duration_seconds: int, question: str | None = None) -> bool:
-        del duration_seconds
-        self.quiz_active = True
-        self.quiz_votes.clear()
-        keyboard = InlineKeyboardMarkup(
-            [[InlineKeyboardButton("👍 SIM", callback_data="quiz_yes"), InlineKeyboardButton("👎 NÃO", callback_data="quiz_no")]]
-        )
-        return await self._broadcast_text(ui.quiz_message(question or "Estão gostando dos sinais? 🎯"), reply_markup=keyboard)
-
-    async def finish_quiz(self) -> bool:
-        yes = sum(1 for vote in self.quiz_votes.values() if vote == "yes")
-        no = sum(1 for vote in self.quiz_votes.values() if vote == "no")
-        self.quiz_active = False
-        return await self._broadcast_text(ui.quiz_result_message(yes, no), reply_markup=self.register_keyboard())
 
     async def _broadcast_text(self, text: str, reply_markup: InlineKeyboardMarkup | None = None) -> bool:
         success = 0
@@ -165,12 +152,38 @@ class TelegramService:
                 await self.application.bot.send_message(
                     chat_id=chat_id,
                     text=text,
-                    reply_markup=reply_markup,
+                    reply_markup=reply_markup or self.register_keyboard(chat_id),
                     parse_mode=ParseMode.HTML,
                 )
                 success += 1
             except Exception as exc:  # noqa: BLE001
                 logger.warning("🛑 Falha ao enviar mensagem para %s: %s", chat_id, exc)
+        self.last_send_ok = bool(targets) and success == len(targets)
+        return self.last_send_ok
+
+    async def broadcast_startup_audio(self, text: str) -> bool:
+        voice_path = self.groups_path.parent / "assets" / "startup_message.mp3"
+        voice_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            gTTS(text=text, lang="pt", tld="com.br").save(str(voice_path))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("🛑 Falha ao gerar áudio de boas-vindas: %s", exc)
+            return False
+
+        success = 0
+        targets = self.target_groups()
+        for chat_id in targets:
+            try:
+                with voice_path.open("rb") as voice_file:
+                    await self.application.bot.send_voice(
+                        chat_id=chat_id,
+                        voice=InputFile(voice_file, filename=voice_path.name),
+                        caption="🎧 Mensagem oficial da sala",
+                        reply_markup=self.register_keyboard(),
+                    )
+                success += 1
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("🛑 Falha ao enviar áudio para %s: %s", chat_id, exc)
         self.last_send_ok = bool(targets) and success == len(targets)
         return self.last_send_ok
 
@@ -200,21 +213,25 @@ class TelegramService:
             )
             return
 
+        if self.admin_user_id and update.effective_user and update.effective_user.id == self.admin_user_id:
+            if text in {"/ultima", "ultima", "/ultimavela"}:
+                await update.effective_message.reply_text("Use /logs para detalhes em runtime no momento.")
+                return
+
         if not allowed:
+            if self.admin_user_id and update.effective_user and update.effective_user.id == self.admin_user_id:
+                if text in {"/logs", "logs"}:
+                    log_path = self.groups_path.parent.parent / "logs" / "aviator-bot.log"
+                    if log_path.exists():
+                        await update.effective_message.reply_text(log_path.read_text(encoding="utf-8")[-3500:])
+                    else:
+                        await update.effective_message.reply_text("Sem logs ainda.")
+                    return
             if text in {"on", "ligar", "continuar", "pare", "parar", "off"}:
                 await update.effective_message.reply_text(
                     f"⚠️ Este chat ainda não está permitido.\nID detectado: `{chat_id}`\nAdicione em config/groups.json e rode git pull/start.",
                     parse_mode=ParseMode.MARKDOWN,
                 )
-            return
-
-        if text == "quiz":
-            if not await self._is_admin(chat_id, update.effective_user.id if update.effective_user else None):
-                await update.effective_message.reply_text("🛑 Apenas administradores podem iniciar QUIZ manual.")
-                return
-            if self._on_quiz_request:
-                await self._on_quiz_request()
-            await update.effective_message.reply_text("🧠 QUIZ manual solicitado pelo ADM.")
             return
 
         if text in {"on", "ligar", "continuar"}:
@@ -231,26 +248,3 @@ class TelegramService:
             if self._on_state_change:
                 await self._on_state_change(False)
             await update.effective_message.reply_text(ui.stopped_message())
-
-    async def _is_admin(self, chat_id: int, user_id: int | None) -> bool:
-        if user_id is None:
-            return False
-        try:
-            member = await self.application.bot.get_chat_member(chat_id, user_id)
-            return member.status in {"administrator", "creator"}
-        except Exception as exc:  # noqa: BLE001
-            logger.info("Não foi possível validar ADM no chat %s: %s", chat_id, exc)
-            return False
-
-    async def _handle_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        del context
-        query = update.callback_query
-        if not query:
-            return
-        await query.answer("Voto registrado ✅")
-        if not self.quiz_active or not query.from_user:
-            return
-        if query.data == "quiz_yes":
-            self.quiz_votes[query.from_user.id] = "yes"
-        elif query.data == "quiz_no":
-            self.quiz_votes[query.from_user.id] = "no"
