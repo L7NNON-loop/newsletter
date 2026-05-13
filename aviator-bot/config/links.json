@@ -1,4 +1,10 @@
 {
   "register_button_text": "📌 REGISTRAR AGORA",
-  "register_url": "https://media1.placard.co.mz/redirect.aspx?pid=4241&bid=1690"
+  "register_url": "https://media1.placard.co.mz/redirect.aspx?pid=4241&bid=1690",
+  "group_links": [
+    {"chat_id": "", "button_text": "📌 REGISTRAR AGORA", "url": ""},
+    {"chat_id": "", "button_text": "📌 REGISTRAR AGORA", "url": ""},
+    {"chat_id": "", "button_text": "📌 REGISTRAR AGORA", "url": ""},
+    {"chat_id": "", "button_text": "📌 REGISTRAR AGORA", "url": ""}
+  ]
 }
