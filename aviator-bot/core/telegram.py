@@ -363,6 +363,11 @@ class TelegramService:
                 await update.effective_message.reply_text("Use /logs para detalhes em runtime no momento.")
                 return
 
+        if self.admin_user_id and update.effective_user and update.effective_user.id == self.admin_user_id:
+            if text in {"/ultima", "ultima", "/ultimavela"}:
+                await update.effective_message.reply_text("Use /logs para detalhes em runtime no momento.")
+                return
+
         if not allowed:
             if self.admin_user_id and update.effective_user and update.effective_user.id == self.admin_user_id:
                 if text in {"/logs", "logs"}:
