@@ -54,7 +54,7 @@ class SignalEngine:
         conservative_factor = self.ai.state.protection_factor + (volatility_boost * 0.08)
         aggressive_factor = self.ai.state.exit_factor + (volatility_boost * 0.18) + max(trend, 0) * 0.25
 
-        protection = round(max(1.5, min(3.0, (after * 0.42) + (volatility * 0.35))), 2)
+        protection = round(max(1.3, min(2.7, (after * 0.42) + (volatility * 0.35))), 2)
         dynamic_exit_cap = 6.0 if trend < 0.12 or volatility > 0.9 else 10.0
         projected_exit = max(protection + 0.2, (protection * 1.35) + max(trend, 0) * 1.8 - (volatility * 0.3))
         exit_value = round(min(dynamic_exit_cap, projected_exit), 2)
@@ -87,7 +87,7 @@ class SignalEngine:
         trend = (short - previous) / max(previous, 0.01)
 
         after = candles[-1]
-        protection = round(max(1.5, min(3.0, (after * 0.40) + 0.25)), 2)
+        protection = round(max(1.3, min(2.7, (after * 0.40) + 0.25)), 2)
         dynamic_exit_cap = 6.0 if trend < 0.12 or volatility > 0.9 else 9.0
         projected_exit = max(protection + 0.2, (protection * 1.32) + max(trend, 0) * 1.5 - (volatility * 0.25))
         exit_value = round(min(dynamic_exit_cap, projected_exit), 2)
@@ -106,7 +106,7 @@ class SignalEngine:
         )
 
     def _clamp_targets(self, protection: float, exit_value: float) -> tuple[float, float]:
-        protection = round(min(3.0, max(1.5, protection)), 2)
+        protection = round(min(2.7, max(1.3, protection)), 2)
         exit_value = round(min(15.0, max(2.0, exit_value)), 2)
         if exit_value <= protection:
             exit_value = round(min(15.0, protection + 1.0), 2)

@@ -23,7 +23,7 @@ def signal_message(signal: Signal, bot_name: str) -> str:
         "🎰 <b>NEXUS AI📢</b> 🎰\n"
         "━━━━━━━━━━━━━━\n"
         "✅ <b>ENTRADA CONFIRMADA</b> ✅\n"
-        '🚀 Aviator: <a href="https://media1.placard.co.mz/redirect.aspx?pid=4241&bid=1690"><b>Apostar agora</b></a>\n\n'
+        '🚀 Aviator: <a href="{REGISTER_URL}"><b>Apostar agora</b></a>\n\n'
         f"📊 APÓS: {signal.after:.2f}x\n"
         f"🎯 Sacar em: {signal.exit:.2f}x\n"
         f"🛡 Proteção: {signal.protection:.2f}x\n\n"
