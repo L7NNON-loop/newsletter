@@ -96,9 +96,8 @@ class TelegramService:
         return groups
 
     def target_groups(self) -> list[int]:
-        if self.online_group_ids:
-            return sorted(self.online_group_ids)
-        return self.active_groups()
+        base = sorted(self.online_group_ids) if self.online_group_ids else self.active_groups()
+        return [gid for gid in base if self.is_allowed_chat(gid) and gid not in self.paused_groups]
 
     def is_allowed_chat(self, chat_id: int) -> bool:
         now = __import__("time").time()
@@ -292,12 +291,52 @@ class TelegramService:
                     await update.effective_message.reply_text(
                         "✅ Acesso admin liberado.\n"
                         "Comandos:\n"
-                        "/status\n/stats\n/pausegroup <id>\n/resumegroup <id>\n/alerta <id> <msg>\n"
+                        "/status\n/stats\n/adicionar\n/validade\n/validade_set <id> <tempo>\n"
+                        "/pausegroup <id>\n/resumegroup <id>\n/alerta <id> <msg>\n"
                         "/addgroup <chat_id> <nome> <active:true|false> [duracao_min]\n"
                         "/setlink <chat_id> <texto_botao> <url>"
                     )
                 else:
                     await update.effective_message.reply_text("Senha inválida.")
+                return
+            if self.admin_authenticated and text.startswith("/validade_set"):
+                parts = raw_text.split(maxsplit=2)
+                if len(parts) >= 3:
+                    gid = parts[1].strip()
+                    exp = self._parse_duration_to_expires(parts[2].strip().lower())
+                    groups = self.configured_groups()
+                    updated = False
+                    for g in groups:
+                        if str(g.get("id", "")).strip() == gid:
+                            g["expires_at"] = exp
+                            g["active"] = True
+                            updated = True
+                            break
+                    if updated:
+                        self._save_groups(groups)
+                        await self.refresh_online_groups()
+                        await update.effective_message.reply_text(f"✅ Validade atualizada para {gid}.")
+                    else:
+                        await update.effective_message.reply_text("Grupo não encontrado.")
+                else:
+                    await update.effective_message.reply_text("Uso: /validade_set <id> <tempo ex: 30d|1h|10m|59s|0>")
+                return
+            if self.admin_authenticated and text.startswith("/validade"):
+                groups = self.configured_groups()
+                import time
+                lines = []
+                now = time.time()
+                for g in groups:
+                    gid = str(g.get("id", ""))
+                    name = str(g.get("name", "sem_nome"))
+                    exp = g.get("expires_at")
+                    if exp:
+                        left = int(float(exp) - now)
+                        status = f"expira em {left}s" if left > 0 else "EXPIRADO"
+                    else:
+                        status = "sem validade"
+                    lines.append(f"{gid} [ {name} ] -> {status}")
+                await update.effective_message.reply_text("⏳ VALIDADES\n" + ("\n".join(lines) if lines else "Sem grupos."))
                 return
             if text in {"adicionar", "/adicionar"}:
                 self._add_group_flow = {}
