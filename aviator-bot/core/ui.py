@@ -16,31 +16,32 @@ SEPARATOR = "━━━━━━━━━━━━━━━━━━━━━━"
 
 
 def signal_message(signal: Signal, bot_name: str) -> str:
+    base_confidence = signal.ai_percent if signal.ai_percent else 93
+    confidence = max(90, min(95, base_confidence))
+    bars = "🟩" * max(1, min(5, round(confidence / 20))) + "⬜" * (5 - max(1, min(5, round(confidence / 20))))
     return (
-        f"{SEPARATOR}\n"
-        f"🤖 {bot_name}\n"
-        f"{SEPARATOR}\n\n"
-        "🎯 NOVA RODADA DETECTADA\n\n"
+        "🎰 <b>NEXUS AI📢</b> 🎰\n"
+        "━━━━━━━━━━━━━━\n"
+        "✅ <b>ENTRADA CONFIRMADA</b> ✅\n"
+        '🚀 Aviator: <a href="{REGISTER_URL}"><b>Apostar agora</b></a>\n\n'
         f"📊 APÓS: {signal.after:.2f}x\n"
-        f"🛡 PROTEÇÃO: {signal.protection:.2f}x\n"
-        f"🔥 SAÍDA: {signal.exit:.2f}x\n"
-        f"👥 PLAYERS: {signal.players}\n\n"
-        f"🧠 AI SCORE: {signal.ai_score} ({signal.ai_percent}%)\n"
-        f"📈 VOL: {signal.volatility:.3f} | TEND: {signal.trend:.3f}\n\n"
-        f"{SEPARATOR}\n"
-        "⚡ STATUS: MONITORANDO\n"
-        f"{SEPARATOR}"
+        f"🎯 Sacar em: {signal.exit:.2f}x\n"
+        f"🛡 Proteção: {signal.protection:.2f}x\n\n"
+        f"📊 Confiança: {confidence}% {bars}\n\n"
+        f"🕐 Enviado às: {__import__('datetime').datetime.now().strftime('%H:%M:%S')}\n"
+        "━━━━━━━━━━━━━━\n"
+        "💫 Não tem conta? Registre-se no botão abaixo!!"
     )
 
 
 def green_message(current: float, previous: float, signal: Signal, bot_name: str) -> str:
+    extra = "\n\nWauuu, Que vela grande...😱😱😱" if current >= 20 else ""
     return (
-        "🟢 GREEN CONFIRMADO 🟢\n\n"
-        f"🤖 {bot_name}\n"
-        f"🚀 Multiplicador: {current:.2f}x\n"
-        f"📊 Vela anterior: {previous:.2f}x\n"
-        f"🔥 Alvo: {signal.exit:.2f}x\n"
-        f"🧠 Estratégia: {signal.ai_score} ({signal.ai_percent}%)"
+        "✅ GREEN CONFIRMADO! Excelente entrada.\n\n"
+        f"🎯 Multiplicador final: {current:.2f}x\n"
+        f"🎯 Alvo previsto: {signal.exit:.2f}x\n"
+        f"🛡 Proteção usada: {signal.protection:.2f}x"
+        f"{extra}"
     )
 
 
