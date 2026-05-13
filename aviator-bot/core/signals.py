@@ -60,6 +60,7 @@ class SignalEngine:
             exit_value = round(protection + 0.10, 2)
 
         players = self._smart_players(volatility=volatility, trend=trend)
+        protection, exit_value = self._clamp_targets(protection, exit_value)
         return Signal(
             after=round(after, 2),
             protection=protection,
@@ -71,6 +72,41 @@ class SignalEngine:
             ai_score=self.ai.score_label(),
             ai_percent=self.ai.score_percent(),
         )
+
+    def build_fallback_signal(self, candles: list[float]) -> Signal | None:
+        if not candles:
+            return None
+
+        window = candles[-self.min_candles :] if len(candles) >= self.min_candles else candles
+        avg = mean(window)
+        volatility = pstdev(window) / max(avg, 0.01) if len(window) > 1 else 0.0
+        short = mean(window[-5:]) if len(window) >= 5 else avg
+        previous = mean(window[-10:-5]) if len(window) >= 10 else avg
+        trend = (short - previous) / max(previous, 0.01)
+
+        after = candles[-1]
+        protection = round(max(after + 0.02, after * 1.06), 2)
+        exit_value = round(max(protection + 0.06, after * 1.22), 2)
+        protection, exit_value = self._clamp_targets(protection, exit_value)
+        players = self._smart_players(volatility=volatility, trend=trend)
+        return Signal(
+            after=round(after, 2),
+            protection=protection,
+            exit=exit_value,
+            players=players,
+            average=round(avg, 3),
+            volatility=round(volatility, 3),
+            trend=round(trend, 3),
+            ai_score=self.ai.score_label(),
+            ai_percent=self.ai.score_percent(),
+        )
+
+    def _clamp_targets(self, protection: float, exit_value: float) -> tuple[float, float]:
+        protection = round(min(3.0, max(1.5, protection)), 2)
+        exit_value = round(min(15.0, max(3.0, exit_value)), 2)
+        if exit_value <= protection:
+            exit_value = round(min(15.0, protection + 1.0), 2)
+        return protection, exit_value
 
     def _smart_players(self, volatility: float, trend: float) -> str:
         center = (self.players_min + self.players_max) // 2
