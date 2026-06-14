@@ -194,6 +194,7 @@ class TelegramService:
     async def _broadcast_text(self, text: str, reply_markup: InlineKeyboardMarkup | None = None) -> bool:
         success = 0
         targets = self.target_groups()
+        firebase_message: str | None = None
         for chat_id in targets:
             if chat_id in self.paused_groups:
                 continue
@@ -206,6 +207,7 @@ class TelegramService:
                     parse_mode=ParseMode.HTML,
                 )
                 success += 1
+                firebase_message = payload_text
                 self.group_signal_count[chat_id] = self.group_signal_count.get(chat_id, 0) + 1
                 try:
                     await self.firebase.set_group_signal_count(chat_id, self.group_signal_count[chat_id])
@@ -213,6 +215,11 @@ class TelegramService:
                     pass
             except Exception as exc:  # noqa: BLE001
                 logger.warning("🛑 Falha ao enviar mensagem para %s: %s", chat_id, exc)
+        if success and firebase_message is not None:
+            try:
+                await self.firebase.save_signal(firebase_message)
+            except Exception as exc:  # noqa: BLE001 - Firebase must not affect Telegram delivery
+                logger.warning("🛑 Sinal enviado ao Telegram, mas falhou ao salvar no Firebase: %s", exc)
         self.last_send_ok = bool(targets) and success == len(targets)
         return self.last_send_ok
 
